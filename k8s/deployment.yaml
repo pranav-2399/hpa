@@ -1,0 +1,65 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Deployment
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hpa-flask
+  labels:
+    app: hpa-flask
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hpa-flask
+  template:
+    metadata:
+      labels:
+        app: hpa-flask
+    spec:
+      containers:
+        - name: hpa-flask
+          image: hpa-flask:latest        # replace with your registry image
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+              name: http
+          env:
+            - name: SECRET_KEY
+              value: "change-me-in-production"
+            - name: DATABASE_URL
+              value: "sqlite:////data/app.db"
+            - name: GUNICORN_WORKERS
+              value: "4"
+            - name: PORT
+              value: "5000"
+          # ── Resource requests / limits for HPA to work ───────────────────
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+          # ── Health probes ────────────────────────────────────────────────
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          # ── Persistent volume for SQLite ─────────────────────────────────
+          volumeMounts:
+            - name: sqlite-data
+              mountPath: /data
+      volumes:
+        - name: sqlite-data
+          emptyDir: {}    # swap to a PVC for persistence across restarts

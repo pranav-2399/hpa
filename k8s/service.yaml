@@ -1,0 +1,18 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Service  (ClusterIP — use NodePort or LoadBalancer to expose externally)
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: hpa-flask
+  labels:
+    app: hpa-flask
+spec:
+  selector:
+    app: hpa-flask
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5000
+      protocol: TCP
+  type: ClusterIP       # change to NodePort / LoadBalancer as needed
