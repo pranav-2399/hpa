@@ -44,7 +44,7 @@ export default function PodVisualizer({ pods }) {
 
             <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
               <div>CPU: <strong style={{ color: '#e2e8f0' }}>{pod.cpuUsage}%</strong></div>
-              <div>Mem: <strong style={{ color: '#e2e8f0' }}>{pod.memoryUsage}%</strong></div>
+              <div>Mem: <strong style={{ color: '#e2e8f0' }}>{pod.memoryUsage} MiB</strong></div>
             </div>
           </div>
         ))}
