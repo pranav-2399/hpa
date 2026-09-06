@@ -20,9 +20,6 @@ def create_server_app():
             k8s_state = coordinator.kubernetesService.getClusterState()
             pods = coordinator.kubernetesService.getPodStatus()
 
-            print("SNAPSHOT")
-            pprint(snapshot)
-
             payload = jsonify({
                 "status": "success",
                 "data": {
