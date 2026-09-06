@@ -33,8 +33,8 @@ def ping():
     return jsonify({"pong": True, "ts": datetime.utcnow().isoformat()})
 
 
-@health_bp.get("/metrics")
-def metrics():
+@health_bp.get("/app-stats")
+def app_stats():
     from app.models import User, Product, Order, Review, AnalyticsEvent
     uptime = round(time.time() - _start_time, 2)
     return jsonify({

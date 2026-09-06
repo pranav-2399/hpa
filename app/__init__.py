@@ -10,6 +10,13 @@ def create_app(config_class=Config):
     # Init extensions
     db.init_app(app)
 
+    # Initialize Prometheus metrics exporter for Flask routes
+    try:
+        from prometheus_flask_exporter import PrometheusMetrics
+        PrometheusMetrics(app)
+    except Exception:
+        pass
+
     with app.app_context():
         # Import models so SQLAlchemy registers them
         from app import models  # noqa: F401
