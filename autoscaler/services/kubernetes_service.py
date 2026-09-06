@@ -69,9 +69,7 @@ class KubernetesService:
                     namespace=self.namespace,
                     label_selector=f"app={self.deploymentName}"
                 )
-                
-                print("POD LIST")
-                
+                               
                 # Fetch pod metric usage if metrics-server is enabled in cluster
                 pod_metrics_map = self._fetch_metrics_server_pod_usage()
 
@@ -109,8 +107,6 @@ class KubernetesService:
                 namespace=self.namespace,
                 plural="pods"
             )
-            print("RES: ")
-            pprint(res)
             for item in res.get("items", []):
                 name = item.get("metadata", {}).get("name")
                 containers = item.get("containers", [])
@@ -140,8 +136,8 @@ class KubernetesService:
             # Metrics server might not have collected data yet
             pass
         
-        print("USAGE MAP: ")
-        pprint(usage_map)
+        #rint("USAGE MAP: ")
+        #pprint(usage_map)
         return usage_map
 
     def scaleDeployment(self, new_replica_count: int) -> bool:

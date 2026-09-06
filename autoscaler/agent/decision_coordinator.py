@@ -3,6 +3,7 @@ import time
 import logging
 from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
+from pprint import pprint
 
 from autoscaler.config import config
 from autoscaler.models import (
@@ -88,6 +89,10 @@ class DecisionCoordinator:
             activePods=current_replicas,
             clusterId=cluster_id
         )
+
+        #print('ANALYZESYSTEMSTATE')
+        #pprint(snapshot.to_dict())
+
         snapshot.validateMetrics()
         self.metricRepo.save(snapshot)
         logger.info(f"Captured MetricSnapshot: CPU={cpu}%, Mem={memory}%, RPS={request_rate}, ActivePods={current_replicas}")

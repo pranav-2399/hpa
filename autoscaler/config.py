@@ -11,24 +11,24 @@ class AutoscalerConfig:
     CLUSTER_ID: str = os.getenv("CLUSTER_ID", "cluster-k8s-local-01")
     CLUSTER_NAME: str = os.getenv("CLUSTER_NAME")
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
-    KUBERNETES_NAMESPACE: str = os.getenv("KUBERNETES_NAMESPACE", "default")
-    DEPLOYMENT_NAME: str = os.getenv("DEPLOYMENT_NAME", "hpa-flask")
+    KUBERNETES_NAMESPACE: str = os.getenv("KUBERNETES_NAMESPACE")
+    DEPLOYMENT_NAME: str = os.getenv("DEPLOYMENT_NAME")
     IN_CLUSTER: bool = os.getenv("IN_CLUSTER", "false").lower() == "true"
-    KUBECONFIG_PATH: str = os.getenv("KUBECONFIG_PATH", "~/.kube/config")
+    KUBECONFIG_PATH: str = os.getenv("KUBECONFIG_PATH")
 
     # Prometheus Integration Settings
     PROMETHEUS_URL: str = os.getenv("PROMETHEUS_URL", "http://localhost:9090")
     PROMETHEUS_QUERY_TIMEOUT: int = int(os.getenv("PROMETHEUS_QUERY_TIMEOUT", "10"))
 
     # Database / PostgreSQL Settings
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/hpa_db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL")
 
     # LLM / Groq Integration Settings
     LLM_API_KEY: str = os.getenv("GROQ_API_KEY", os.getenv("LLM_API_KEY", ""))
-    LLM_MODEL_NAME: str = os.getenv("LLM_MODEL_NAME", "openai/gpt-oss-20b")
-    LLM_ENDPOINT: str = os.getenv("LLM_ENDPOINT", "https://api.groq.com/openai/v1/chat/completions")
-    LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.2"))
-    LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "500"))
+    LLM_MODEL_NAME: str = os.getenv("LLM_MODEL_NAME")
+    LLM_ENDPOINT: str = os.getenv("LLM_ENDPOINT")
+    LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE"))
+    LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS"))
 
     # Autoscaling Guardrails & Thresholds
     CPU_THRESHOLD_PERCENT: float = float(os.getenv("CPU_THRESHOLD_PERCENT", "75.0"))

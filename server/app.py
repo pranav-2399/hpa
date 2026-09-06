@@ -1,6 +1,8 @@
 import os
+from pprint import pprint
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+
 from autoscaler.config import config
 from autoscaler.main import build_autoscaler_agent
 
@@ -17,8 +19,11 @@ def create_server_app():
             snapshot = coordinator.analyzeSystemState()
             k8s_state = coordinator.kubernetesService.getClusterState()
             pods = coordinator.kubernetesService.getPodStatus()
-            
-            return jsonify({
+
+            print("SNAPSHOT")
+            pprint(snapshot)
+
+            payload = jsonify({
                 "status": "success",
                 "data": {
                     "clusterId": snapshot.clusterId,
@@ -31,7 +36,8 @@ def create_server_app():
                     "k8sState": k8s_state,
                     "pods": [p.getResourceUtilization() | {"podName": p.podName, "status": p.status} for p in pods]
                 }
-            })
+            })            
+            return payload
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)}), 500
 

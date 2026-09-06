@@ -1,6 +1,8 @@
 import logging
+from pprint import pprint
 import requests
 from typing import Dict, Any, List, Optional
+
 from autoscaler.config import config
 
 logger = logging.getLogger("autoscaler.prometheus")
@@ -14,13 +16,19 @@ class PrometheusService:
 
     def queryMetrics(self, query: str) -> List[Dict[str, Any]]:
         """Executes PromQL instant query against Prometheus API."""
+        
         endpoint = f"{self.prometheusUrl}/api/v1/query"
+        print('queryMetrics:')
+        print(endpoint)
         try:
             response = requests.get(endpoint, params={"query": query}, timeout=self.queryTimeout)
+            pprint(response.json())
             if response.status_code == 200:
                 data = response.json()
                 if data.get("status") == "success":
-                    return data.get("data", {}).get("result", [])
+                    payload = data.get("data", {}).get("result", [])
+                    #pprint(payload)
+                    return payload
             logger.warning(f"Prometheus query returned status {response.status_code}: {response.text}")
             return []
         except Exception as e:
@@ -30,6 +38,9 @@ class PrometheusService:
     def getCpuUsage(self, deployment_name: str = config.DEPLOYMENT_NAME) -> float:
         """Queries deployment average CPU utilization percentage from Prometheus."""
         query = f'sum(rate(container_cpu_usage_seconds_total{{pod=~"{deployment_name}-.*"}}[2m])) / count(container_cpu_usage_seconds_total{{pod=~"{deployment_name}-.*"}}) * 100'
+
+        print(f'getCpuUsage: {query}')
+
         results = self.queryMetrics(query)
         if results and "value" in results[0]:
             try:
