@@ -1,83 +1,157 @@
 import logging
 from typing import Dict, Any, List, Optional
 from autoscaler.models.cluster import Pod
+from autoscaler.config import config
+from pprint import pprint
 
 logger = logging.getLogger("autoscaler.kubernetes")
 
 class KubernetesService:
-    """Handles actual Kubernetes cluster and deployment scaling operations."""
+    """Handles real Kubernetes cluster monitoring and deployment scaling operations."""
 
-    def __init__(self, namespace: str = "default", deploymentName: str = "hpa-load-target", in_cluster: bool = False):
+    def __init__(self, namespace: str = config.KUBERNETES_NAMESPACE, deploymentName: str = config.DEPLOYMENT_NAME, in_cluster: bool = config.IN_CLUSTER):
         self.namespace = namespace
         self.deploymentName = deploymentName
         self.in_cluster = in_cluster
         self.kubernetesClient = None
-        self._current_replicas = 2  # Simulated / initial replica state
+        self.coreClient = None
+        self.customObjectsClient = None
         self._init_client()
 
     def _init_client(self) -> None:
-        """Initializes Python kubernetes client if available."""
+        """Initializes official Python kubernetes SDK client from kubeconfig or in-cluster service account."""
         try:
-            from kubernetes import client, config
+            from kubernetes import client, config as k8s_config
             if self.in_cluster:
-                config.load_incluster_config()
+                k8s_config.load_incluster_config()
+                logger.info("Loaded in-cluster Kubernetes configuration.")
             else:
-                config.load_kube_config()
+                k8s_config.load_kube_config(config_file=config.KUBECONFIG_PATH)
+                logger.info(f"Loaded kubeconfig from '{config.KUBECONFIG_PATH}'.")
+
             self.kubernetesClient = client.AppsV1Api()
             self.coreClient = client.CoreV1Api()
-            logger.info("Successfully initialized Kubernetes API client.")
+            self.customObjectsClient = client.CustomObjectsApi()
+            logger.info("Kubernetes API clients initialized successfully.")
         except Exception as e:
-            logger.warning(f"Kubernetes API client init warning ({e}). Operating in direct control / mock mode.")
+            logger.error(f"Failed to initialize Kubernetes API client: {e}. Ensure Kubernetes cluster (Minikube) is running.")
             self.kubernetesClient = None
+            self.coreClient = None
+            self.customObjectsClient = None
 
     def getCurrentReplicas(self) -> int:
-        """Queries deployment active replica count."""
+        """Queries the live active deployment replica count from Kubernetes API."""
+        if not self.kubernetesClient:
+            logger.warning("Kubernetes client unreachable. Trying to re-initialize connection...")
+            self._init_client()
+
         if self.kubernetesClient:
             try:
-                dep = self.kubernetesClient.read_namespaced_deployment(self.deploymentName, self.namespace)
-                self._current_replicas = dep.spec.replicas or 1
-                return self._current_replicas
+                dep = self.kubernetesClient.read_namespaced_deployment(
+                    name=self.deploymentName,
+                    namespace=self.namespace
+                )
+                return dep.spec.replicas or 0
             except Exception as e:
-                logger.error(f"Failed to query Kubernetes deployment: {e}")
-        return self._current_replicas
+                logger.error(f"Error querying deployment '{self.deploymentName}' in namespace '{self.namespace}': {e}")
+                return 0
+        return 0
 
     def getPodStatus(self) -> List[Pod]:
-        """Returns pod object instances running under deployment."""
-        pods = []
-        if self.kubernetesClient and hasattr(self, 'coreClient'):
+        """Queries and returns live Pod objects running in the Kubernetes cluster."""
+        pods: List[Pod] = []
+        if not self.coreClient:
+            self._init_client()
+
+        if self.coreClient:
             try:
                 pod_list = self.coreClient.list_namespaced_pod(
-                    self.namespace, label_selector=f"app={self.deploymentName}"
+                    namespace=self.namespace,
+                    label_selector=f"app={self.deploymentName}"
                 )
+                
+                print("POD LIST")
+                
+                # Fetch pod metric usage if metrics-server is enabled in cluster
+                pod_metrics_map = self._fetch_metrics_server_pod_usage()
+
                 for item in pod_list.items:
+                    pod_name = item.metadata.name
+                    pod_uid = item.metadata.uid or pod_name
+                    phase = item.status.phase or "Unknown"
+
+                    # Check if metrics server returned real CPU/Memory for this pod
+                    usage = pod_metrics_map.get(pod_name, {"cpu": 0.0, "memory": 0.0})
+
                     pods.append(Pod(
-                        podId=item.metadata.uid or item.metadata.name,
-                        podName=item.metadata.name,
-                        status=item.status.phase or "Running",
-                        cpuUsage=45.0,
-                        memoryUsage=128.0,
-                        clusterId="k8s-cluster"
+                        podId=pod_uid,
+                        podName=pod_name,
+                        status=phase,
+                        cpuUsage=usage["cpu"],
+                        memoryUsage=usage["memory"],
+                        clusterId=config.CLUSTER_ID
                     ))
                 return pods
             except Exception as e:
-                logger.error(f"Error fetching pod status from K8s: {e}")
+                logger.error(f"Error fetching live pods from Kubernetes cluster: {e}")
+                return []
+        return []
+
+    def _fetch_metrics_server_pod_usage(self) -> Dict[str, Dict[str, float]]:
+        """Queries metrics.k8s.io metrics-server API if available on Minikube."""
+        usage_map = {}
+        if not self.customObjectsClient:
+            return usage_map
+        try:
+            res = self.customObjectsClient.list_namespaced_custom_object(
+                group="metrics.k8s.io",
+                version="v1beta1",
+                namespace=self.namespace,
+                plural="pods"
+            )
+            print("RES: ")
+            pprint(res)
+            for item in res.get("items", []):
+                name = item.get("metadata", {}).get("name")
+                containers = item.get("containers", [])
+                cpu_nano = 0
+                mem_bytes = 0
+                for c in containers:
+                    cpu_str = c.get("usage", {}).get("cpu", "0")
+                    mem_str = c.get("usage", {}).get("memory", "0")
+                    # Parse nanocores (e.g. 5000000n)
+                    if cpu_str.endswith("n"):
+                        cpu_nano += int(cpu_str[:-1])
+                    elif cpu_str.endswith("m"):
+                        cpu_nano += int(cpu_str[:-1]) * 1000000
+                    
+                    # Parse memory Ki/Mi
+                    if mem_str.endswith("Ki"):
+                        mem_bytes += int(mem_str[:-2]) * 1024
+                    elif mem_str.endswith("Mi"):
+                        mem_bytes += int(mem_str[:-2]) * 1024 * 1024
+                
+                # Convert CPU to millicores / percentage (250m request base)
+                cpu_milli = cpu_nano / 1000000.0
+                cpu_percent = round((cpu_milli / 250.0) * 100.0, 2)
+                mem_mb = round(mem_bytes / (1024 * 1024), 2)
+                usage_map[name] = {"cpu": cpu_percent, "memory": mem_mb}
+        except Exception:
+            # Metrics server might not have collected data yet
+            pass
         
-        # Fallback simulation list
-        for i in range(self._current_replicas):
-            pods.append(Pod(
-                podId=f"pod-uid-{i+1}",
-                podName=f"{self.deploymentName}-{i+1}",
-                status="Running",
-                cpuUsage=50.0,
-                memoryUsage=128.0,
-                clusterId="k8s-cluster"
-            ))
-        return pods
+        print("USAGE MAP: ")
+        pprint(usage_map)
+        return usage_map
 
     def scaleDeployment(self, new_replica_count: int) -> bool:
-        """Scales Kubernetes deployment to new target replica count."""
-        logger.info(f"Scaling deployment '{self.deploymentName}' from {self._current_replicas} to {new_replica_count} replicas...")
+        """Issues an actual scale patch request to Kubernetes API for deployment/hpa-flask."""
+        current = self.getCurrentReplicas()
+        logger.info(f"Issuing Kubernetes patch request to scale '{self.deploymentName}' from {current} to {new_replica_count} replicas...")
         
+        if not self.kubernetesClient:
+            self._init_client()
+
         if self.kubernetesClient:
             try:
                 body = {"spec": {"replicas": new_replica_count}}
@@ -86,31 +160,49 @@ class KubernetesService:
                     namespace=self.namespace,
                     body=body
                 )
-                self._current_replicas = new_replica_count
-                logger.info("K8s Deployment patch scale successful.")
+                logger.info(f"Kubernetes Deployment '{self.deploymentName}' scaled successfully to {new_replica_count} replicas.")
                 return True
             except Exception as e:
-                logger.error(f"K8s scaling failed: {e}")
+                logger.error(f"Failed to scale Kubernetes deployment '{self.deploymentName}': {e}")
                 return False
-        
-        # In mock/standalone mode, update state directly
-        self._current_replicas = new_replica_count
-        logger.info(f"Deployment scaling completed. New replica count: {self._current_replicas}")
-        return True
+        logger.error("Cannot scale deployment: Kubernetes cluster is unreachable.")
+        return False
 
     def createPod(self) -> bool:
-        """Increments replica count by 1."""
-        return self.scaleDeployment(self._current_replicas + 1)
+        """Increments replica count by 1 on Kubernetes deployment."""
+        current = self.getCurrentReplicas()
+        return self.scaleDeployment(current + 1)
 
     def removePod(self) -> bool:
-        """Decrements replica count by 1 (minimum 1)."""
-        target = max(1, self._current_replicas - 1)
+        """Decrements replica count by 1 (minimum 1) on Kubernetes deployment."""
+        current = self.getCurrentReplicas()
+        target = max(1, current - 1)
         return self.scaleDeployment(target)
 
     def getClusterState(self) -> Dict[str, Any]:
+        """Returns actual Kubernetes deployment state from cluster."""
+        if not self.kubernetesClient:
+            self._init_client()
+
+        connected = self.kubernetesClient is not None
+        status = "Connected" if connected else "Unreachable"
+        replicas = 0
+        ready_replicas = 0
+        
+        if connected:
+            try:
+                dep = self.kubernetesClient.read_namespaced_deployment(self.deploymentName, self.namespace)
+                replicas = dep.spec.replicas or 0
+                ready_replicas = dep.status.ready_replicas or 0
+            except Exception as e:
+                status = f"Error: {e}"
+
         return {
+            "clusterId": config.CLUSTER_ID,
             "namespace": self.namespace,
             "deployment": self.deploymentName,
-            "replicas": self.getCurrentReplicas(),
-            "k8sClientConnected": self.kubernetesClient is not None
+            "status": status,
+            "desiredReplicas": replicas,
+            "readyReplicas": ready_replicas,
+            "k8sClientConnected": connected
         }

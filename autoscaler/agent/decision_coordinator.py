@@ -70,13 +70,13 @@ class DecisionCoordinator:
         # Stabilization timer tracking
         self.lastScalingTime: Optional[datetime] = None
 
-    def analyzeSystemState(self, cluster_id: str = "cluster-k8s-local-01") -> MetricSnapshot:
+    def analyzeSystemState(self, cluster_id: str = config.CLUSTER_ID) -> MetricSnapshot:
         """Polls Prometheus and Kubernetes to collect current cluster state."""
         current_replicas = self.kubernetesService.getCurrentReplicas()
-        cpu = self.resourceAnalysisService.prometheusService.getCpuUsage()
-        memory = self.resourceAnalysisService.prometheusService.getMemoryUsage()
-        request_rate = self.resourceAnalysisService.prometheusService.getRequestRate()
-        response_time = self.resourceAnalysisService.prometheusService.getResponseTime()
+        cpu = self.resourceAnalysisService.prometheusService.getCpuUsage(config.DEPLOYMENT_NAME)
+        memory = self.resourceAnalysisService.prometheusService.getMemoryUsage(config.DEPLOYMENT_NAME)
+        request_rate = self.resourceAnalysisService.prometheusService.getRequestRate(config.DEPLOYMENT_NAME)
+        response_time = self.resourceAnalysisService.prometheusService.getResponseTime(config.DEPLOYMENT_NAME)
 
         snapshot = MetricSnapshot(
             metricId=f"metric-{uuid.uuid4().hex[:8]}",
