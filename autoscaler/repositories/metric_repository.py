@@ -72,6 +72,29 @@ class MetricRepository(BaseRepository):
         sorted_snaps = sorted(snapshots, key=lambda s: s.timestamp, reverse=True)
         return sorted_snaps[:limit]
 
+    def getSnapshotsInRange(self, cluster_id: str, start_time: datetime, end_time: datetime, limit: int = 5000) -> List[MetricSnapshot]:
+        """Returns snapshots in a UTC time range, oldest first."""
+        rows = self.db_service.executeQuery(
+            f"SELECT * FROM {self.table_name} WHERE clusterId = %s AND timestamp >= %s AND timestamp <= %s ORDER BY timestamp ASC",
+            (cluster_id, start_time, end_time)
+        )
+        if rows or self.db_service.is_connected and "postgresql" in self.db_service.db_url:
+            snapshots = [self._row_to_entity(row) for row in rows]
+        else:
+            stored_snapshots = self.findByCluster(cluster_id)
+            snapshots = [
+                snapshot for snapshot in sorted(stored_snapshots, key=lambda item: item.timestamp)
+                if start_time <= snapshot.timestamp <= end_time
+            ]
+
+        if len(snapshots) <= limit:
+            return snapshots
+        if limit == 1:
+            return [snapshots[-1]]
+        # Spread capped chart results over the full requested window.
+        step = (len(snapshots) - 1) / (limit - 1)
+        return [snapshots[round(index * step)] for index in range(limit)]
+
     def _fallback_latest(self, cluster_id: str) -> Optional[MetricSnapshot]:
         snapshots = self.findByCluster(cluster_id)
         if not snapshots:

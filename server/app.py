@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 from pprint import pprint
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -49,11 +50,26 @@ def create_server_app():
     @app.route("/api/metrics/history", methods=["GET"])
     def get_metrics_history():
         try:
-            limit = int(request.args.get("limit", 30))
-            snapshots = coordinator.metricRepo.getRecentSnapshots(config.CLUSTER_ID, limit=limit)
+            limit = min(max(int(request.args.get("limit", 30)), 1), 5000)
+            start_value = request.args.get("start")
+            end_value = request.args.get("end")
+            if start_value and end_value:
+                start_time = datetime.fromisoformat(start_value.replace("Z", "+00:00"))
+                end_time = datetime.fromisoformat(end_value.replace("Z", "+00:00"))
+                if start_time.tzinfo:
+                    start_time = start_time.astimezone(timezone.utc).replace(tzinfo=None)
+                if end_time.tzinfo:
+                    end_time = end_time.astimezone(timezone.utc).replace(tzinfo=None)
+                if end_time < start_time:
+                    return jsonify({"status": "error", "message": "End time must be after start time."}), 400
+                snapshots = coordinator.metricRepo.getSnapshotsInRange(
+                    config.CLUSTER_ID, start_time, end_time, limit=limit
+                )
+            else:
+                snapshots = list(reversed(coordinator.metricRepo.getRecentSnapshots(config.CLUSTER_ID, limit=limit)))
             return jsonify({
                 "status": "success",
-                "data": [s.to_dict() for s in reversed(snapshots)]
+                "data": [s.to_dict() for s in snapshots]
             })
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)}), 500

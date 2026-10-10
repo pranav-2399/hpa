@@ -7,15 +7,17 @@ const metricDefinitions = [
   { key: 'memory', label: 'Memory usage', suffix: '%', decimals: 1, Icon: HardDrive, tone: 'pink', note: 'Memory pressure', bar: true },
   { key: 'rps', label: 'Request rate', suffix: ' req/s', decimals: 1, Icon: Activity, tone: 'cyan', note: 'Prometheus · 2m rate' },
   { key: 'pods', label: 'Active replicas', suffix: '', decimals: 0, Icon: Server, tone: 'green', note: 'Min 1 · Max 10' },
-  { key: 'cost', label: 'Estimated cost', prefix: '$', suffix: ' / hr', decimals: 2, Icon: DollarSign, tone: 'amber', note: '$0.05 per pod / hr' }
+  { key: 'cost', label: 'Instantaneous cost rate', prefix: '$', suffix: ' / hr', decimals: 2, Icon: DollarSign, tone: 'amber', note: 'Current replicas · $0.05 per pod-hour' },
+  { key: 'cumulativeCost', label: 'Cumulative estimated cost', prefix: '$', suffix: '', decimals: 4, Icon: DollarSign, tone: 'green', note: 'Across retained metric history' }
 ];
 
-export default function MetricCards({ clusterData, selectedMetric, onSelectMetric }) {
+export default function MetricCards({ clusterData, cumulativeCost, selectedMetric, onSelectMetric }) {
   const values = {
     cpu: Number(clusterData?.cpuUsage ?? 45),
     memory: Number(clusterData?.memoryUsage ?? 55),
     rps: Number(clusterData?.requestRate ?? 120),
-    pods: Number(clusterData?.activePods ?? 2)
+    pods: Number(clusterData?.activePods ?? 2),
+    cumulativeCost: Number(cumulativeCost ?? 0)
   };
   values.cost = values.pods * 0.05;
 

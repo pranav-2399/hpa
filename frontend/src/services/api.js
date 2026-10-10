@@ -24,6 +24,19 @@ export async function fetchMetricsHistory(limit = 30) {
   }
 }
 
+export async function fetchMetricsHistoryRange(start, end, limit = 5000) {
+  try {
+    const params = new URLSearchParams({ start, end, limit: String(limit) });
+    const res = await fetch(`${BASE_URL}/metrics/history?${params}`);
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+    const json = await res.json();
+    return json.data || [];
+  } catch (err) {
+    console.warn('API error fetching metric history range:', err);
+    return null;
+  }
+}
+
 export async function fetchAgentDecisions(limit = 20) {
   try {
     const res = await fetch(`${BASE_URL}/agent/decisions?limit=${limit}`);
