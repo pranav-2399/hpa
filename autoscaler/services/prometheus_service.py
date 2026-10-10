@@ -66,6 +66,22 @@ class PrometheusService:
                 pass
         return 0.0
 
+    def getRequestRateByPod(self, deployment_name: str = config.DEPLOYMENT_NAME) -> Dict[str, float]:
+        """Returns request rates only when Prometheus has a pod label on the series."""
+        query = f'sum by (pod) (rate(flask_http_request_total{{job="{deployment_name}"}}[2m]))'
+        results = self.queryMetrics(query)
+        rates = {}
+        for result in results:
+            pod_name = result.get("metric", {}).get("pod")
+            value = result.get("value", [None, None])
+            if not pod_name or len(value) < 2:
+                continue
+            try:
+                rates[pod_name] = round(float(value[1]), 2)
+            except (TypeError, ValueError):
+                continue
+        return rates
+
     def getResponseTime(self, deployment_name: str = config.DEPLOYMENT_NAME) -> float:
         """Queries HTTP response latency in milliseconds from Prometheus."""
         query = f'(sum(rate(flask_http_request_duration_seconds_sum{{job="{deployment_name}"}}[2m])) / (sum(rate(flask_http_request_duration_seconds_count{{job="{deployment_name}"}}[2m])) + 0.0001)) * 1000'

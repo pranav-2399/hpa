@@ -78,14 +78,23 @@ class KubernetesService:
                     pod_uid = item.metadata.uid or pod_name
                     phase = item.status.phase or "Unknown"
 
-                    # Check if metrics server returned real CPU/Memory for this pod
-                    usage = pod_metrics_map.get(pod_name, {"cpu": 0.0, "memory": 0.0})
+                    # Compare each pod's CPU usage against its own declared CPU request.
+                    usage = pod_metrics_map.get(pod_name, {"cpuMillicores": 0.0, "memory": 0.0})
+                    cpu_request_millicores = sum(
+                        self._parse_cpu_millicores((container.resources.requests or {}).get("cpu", "0"))
+                        for container in (item.spec.containers or [])
+                        if container.resources
+                    )
+                    cpu_percent = (
+                        round((usage["cpuMillicores"] / cpu_request_millicores) * 100.0, 2)
+                        if cpu_request_millicores > 0 else 0.0
+                    )
 
                     pods.append(Pod(
                         podId=pod_uid,
                         podName=pod_name,
                         status=phase,
-                        cpuUsage=usage["cpu"],
+                        cpuUsage=cpu_percent,
                         memoryUsage=usage["memory"],
                         clusterId=config.CLUSTER_ID
                     ))
@@ -94,6 +103,21 @@ class KubernetesService:
                 logger.error(f"Error fetching live pods from Kubernetes cluster: {e}")
                 return []
         return []
+
+    @staticmethod
+    def _parse_cpu_millicores(quantity: str) -> float:
+        """Converts a Kubernetes CPU quantity such as 250m or 0.5 to millicores."""
+        value = str(quantity).strip()
+        try:
+            if value.endswith("n"):
+                return float(value[:-1]) / 1_000_000
+            if value.endswith("u"):
+                return float(value[:-1]) / 1_000
+            if value.endswith("m"):
+                return float(value[:-1])
+            return float(value) * 1_000
+        except (TypeError, ValueError):
+            return 0.0
 
     def _fetch_metrics_server_pod_usage(self) -> Dict[str, Dict[str, float]]:
         """Queries metrics.k8s.io metrics-server API if available on Minikube."""
@@ -110,16 +134,12 @@ class KubernetesService:
             for item in res.get("items", []):
                 name = item.get("metadata", {}).get("name")
                 containers = item.get("containers", [])
-                cpu_nano = 0
+                cpu_millicores = 0.0
                 mem_bytes = 0
                 for c in containers:
                     cpu_str = c.get("usage", {}).get("cpu", "0")
                     mem_str = c.get("usage", {}).get("memory", "0")
-                    # Parse nanocores (e.g. 5000000n)
-                    if cpu_str.endswith("n"):
-                        cpu_nano += int(cpu_str[:-1])
-                    elif cpu_str.endswith("m"):
-                        cpu_nano += int(cpu_str[:-1]) * 1000000
+                    cpu_millicores += self._parse_cpu_millicores(cpu_str)
                     
                     # Parse memory Ki/Mi
                     if mem_str.endswith("Ki"):
@@ -127,11 +147,8 @@ class KubernetesService:
                     elif mem_str.endswith("Mi"):
                         mem_bytes += int(mem_str[:-2]) * 1024 * 1024
                 
-                # Convert CPU to millicores / percentage (250m request base)
-                cpu_milli = cpu_nano / 1000000.0
-                cpu_percent = round((cpu_milli / 250.0) * 100.0, 2)
                 mem_mb = round(mem_bytes / (1024 * 1024), 2)
-                usage_map[name] = {"cpu": cpu_percent, "memory": mem_mb}
+                usage_map[name] = {"cpuMillicores": cpu_millicores, "memory": mem_mb}
         except Exception:
             # Metrics server might not have collected data yet
             pass

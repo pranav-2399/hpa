@@ -16,9 +16,10 @@ def create_server_app():
     @app.route("/api/cluster/status", methods=["GET"])
     def get_cluster_status():
         try:
-            snapshot = coordinator.analyzeSystemState()
-            k8s_state = coordinator.kubernetesService.getClusterState()
             pods = coordinator.kubernetesService.getPodStatus()
+            snapshot = coordinator.analyzeSystemState(pod_metrics=pods)
+            k8s_state = coordinator.kubernetesService.getClusterState()
+            request_rates = coordinator.resourceAnalysisService.prometheusService.getRequestRateByPod(config.DEPLOYMENT_NAME)
 
             payload = jsonify({
                 "status": "success",
@@ -31,7 +32,14 @@ def create_server_app():
                     "responseTime": snapshot.responseTime,
                     "averageLoad": snapshot.calculateAverageLoad(),
                     "k8sState": k8s_state,
-                    "pods": [p.getResourceUtilization() | {"podName": p.podName, "status": p.status} for p in pods]
+                    "pods": [
+                        p.getResourceUtilization() | {
+                            "podName": p.podName,
+                            "status": p.status,
+                            "requestRate": request_rates.get(p.podName)
+                        }
+                        for p in pods
+                    ]
                 }
             })            
             return payload

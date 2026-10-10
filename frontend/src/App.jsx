@@ -5,6 +5,8 @@ import MetricsChart from './components/MetricsChart';
 import AgentReasoningFeed from './components/AgentReasoningFeed';
 import PodVisualizer from './components/PodVisualizer';
 import ScalingTimeline from './components/ScalingTimeline';
+import Reveal from './components/Reveal';
+import PodMetricChart from './components/PodMetricChart';
 import {
   fetchClusterStatus,
   fetchMetricsHistory,
@@ -18,12 +20,29 @@ export default function App() {
   const [metricsHistory, setMetricsHistory] = useState([]);
   const [decisions, setDecisions] = useState([]);
   const [actions, setActions] = useState([]);
+  const [podMetricHistory, setPodMetricHistory] = useState([]);
+  const [selectedPodMetric, setSelectedPodMetric] = useState(null);
   const [isTriggering, setIsTriggering] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
   const loadData = async () => {
     const status = await fetchClusterStatus();
-    if (status) setClusterData(status);
+    if (status) {
+      setClusterData(status);
+      if (Array.isArray(status.pods)) {
+        setPodMetricHistory((previous) => [
+          ...previous,
+          {
+            timestamp: Date.now(),
+            pods: Object.fromEntries(status.pods.map((pod) => [pod.podName, {
+              cpuUsage: Number(pod.cpuUsage ?? 0),
+              memoryUsage: Number(pod.memoryUsage ?? 0),
+              requestRate: pod.requestRate == null ? null : Number(pod.requestRate)
+            }]))
+          }
+        ].slice(-60));
+      }
+    }
 
     const history = await fetchMetricsHistory(30);
     if (history) setMetricsHistory(history);
@@ -58,16 +77,27 @@ export default function App() {
         lastUpdated={lastUpdated}
       />
 
-      <MetricCards clusterData={clusterData} />
+      <Reveal><MetricCards clusterData={clusterData} selectedMetric={selectedPodMetric} onSelectMetric={setSelectedPodMetric} /></Reveal>
 
-      <MetricsChart history={metricsHistory} />
+      {selectedPodMetric && (
+        <Reveal key={selectedPodMetric} delay={40}>
+          <PodMetricChart
+            metric={selectedPodMetric}
+            pods={clusterData?.pods || []}
+            history={podMetricHistory}
+            onClose={() => setSelectedPodMetric(null)}
+          />
+        </Reveal>
+      )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '1.5rem' }}>
-        <AgentReasoningFeed decisions={decisions} />
-        <PodVisualizer pods={clusterData?.pods} />
+      <Reveal delay={80}><MetricsChart history={metricsHistory} /></Reveal>
+
+      <div className="dashboard-grid">
+        <Reveal delay={40}><AgentReasoningFeed decisions={decisions} /></Reveal>
+        <Reveal delay={120}><PodVisualizer pods={clusterData?.pods} /></Reveal>
       </div>
 
-      <ScalingTimeline actions={actions} />
+      <Reveal delay={80}><ScalingTimeline actions={actions} /></Reveal>
     </div>
   );
 }

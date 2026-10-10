@@ -18,4 +18,5 @@ build/
 .vscode/
 
 frontend/node_modules
+/prometheus-data/
 context.md

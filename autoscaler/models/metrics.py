@@ -6,7 +6,7 @@ from typing import Dict, Any
 class MetricSnapshot:
     metricId: str
     timestamp: datetime
-    cpuUsage: float       # Average CPU utilization percentage (0 - 100%)
+    cpuUsage: float       # Average running-pod CPU use as a percentage of each pod's CPU request
     memoryUsage: float    # Average Memory utilization percentage (0 - 100%)
     requestRate: float    # Requests per second (RPS)
     responseTime: float   # Latency in milliseconds (ms)

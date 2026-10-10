@@ -1,7 +1,7 @@
 import uuid
 import time
 import logging
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 from pprint import pprint
 
@@ -18,6 +18,7 @@ from autoscaler.models import (
     ACTION_SCALE_DOWN,
     ACTION_MAINTAIN
 )
+from autoscaler.models.cluster import Pod
 from autoscaler.services import (
     PrometheusService,
     KubernetesService,
@@ -71,10 +72,17 @@ class DecisionCoordinator:
         # Stabilization timer tracking
         self.lastScalingTime: Optional[datetime] = None
 
-    def analyzeSystemState(self, cluster_id: str = config.CLUSTER_ID) -> MetricSnapshot:
+    def analyzeSystemState(self, cluster_id: str = config.CLUSTER_ID, pod_metrics: Optional[List[Pod]] = None) -> MetricSnapshot:
         """Polls Prometheus and Kubernetes to collect current cluster state."""
         current_replicas = self.kubernetesService.getCurrentReplicas()
-        cpu = self.resourceAnalysisService.prometheusService.getCpuUsage(config.DEPLOYMENT_NAME)
+        pods = pod_metrics if pod_metrics is not None else self.kubernetesService.getPodStatus()
+        running_pods = [pod for pod in pods if pod.status.lower() == "running"]
+        if running_pods:
+            # Match the per-pod dashboard metric: CPU used / that pod's CPU request.
+            cpu = round(sum(pod.cpuUsage for pod in running_pods) / len(running_pods), 2)
+        else:
+            # Preserve a useful signal while Kubernetes pod metrics are unavailable.
+            cpu = self.resourceAnalysisService.prometheusService.getCpuUsage(config.DEPLOYMENT_NAME)
         memory = self.resourceAnalysisService.prometheusService.getMemoryUsage(config.DEPLOYMENT_NAME)
         request_rate = self.resourceAnalysisService.prometheusService.getRequestRate(config.DEPLOYMENT_NAME)
         response_time = self.resourceAnalysisService.prometheusService.getResponseTime(config.DEPLOYMENT_NAME)
