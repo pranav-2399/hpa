@@ -6,11 +6,11 @@ from typing import Dict, Any, Optional
 logger = logging.getLogger("autoscaler.llm")
 
 class LLMService:
-    """Abstraction layer interfacing between Autoscaler decision loop and Llama / Groq LLM API."""
+    """Abstraction layer interfacing between Autoscaler decision loop and Groq LLM API."""
 
     def __init__(
         self,
-        modelName: str = "llama-3.3-70b-versatile",
+        modelName: str = "openai/gpt-oss-120b",
         apiKey: str = "mock-key",
         endpoint: str = "https://api.groq.com/openai/v1/chat/completions",
         temperature: float = 0.2,
@@ -23,7 +23,7 @@ class LLMService:
         self.maxTokens = maxTokens
 
     def buildPrompt(self, metric_summary: Dict[str, Any], prediction_summary: Dict[str, Any], resource_summary: Dict[str, Any], cost_summary: Dict[str, Any], min_replicas: int, max_replicas: int) -> str:
-        """Constructs structured JSON system prompt for Llama reasoning."""
+        """Constructs structured JSON system prompt for reasoning."""
         prompt = f"""You are an expert Kubernetes AI Horizontal Pod Autoscaler agent.
 Analyze the provided system state metrics, workload prediction, resource analysis, and cost estimation to decide whether to scale up, scale down, or maintain replica count.
 
@@ -62,7 +62,7 @@ Respond STRICTLY in valid JSON format with NO markdown wrapping or extra comment
         return prompt.strip()
 
     def sendRequest(self, prompt: str) -> Optional[str]:
-        """Sends HTTP request to Groq / Llama API endpoint."""
+        """Sends HTTP request to Groq API endpoint."""
         if not self.apiKey or self.apiKey in ("mock-key", "change-me", ""):
             logger.info("No valid LLM API key provided. Using built-in AI reasoning engine fallback.")
             return None

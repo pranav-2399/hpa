@@ -14,7 +14,7 @@ export default function AgentReasoningFeed({ decisions }) {
         <Bot color="#8b5cf6" size={22} />
         <div>
           <h2 style={{ fontSize: '1.1rem', fontWeight: 600 }}>AI Decision Reasoning Stream</h2>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Llama-3.3 Agentic Chain-of-Thought & Audits</p>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Agentic Chain-of-Thought & Audits</p>
         </div>
       </div>
 
